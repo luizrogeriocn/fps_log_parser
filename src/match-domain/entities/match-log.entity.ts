@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { Match } from './match.entity';
 
 export enum MatchLogStatus {
   Uploaded = 'uploaded',
@@ -32,6 +34,9 @@ export class MatchLog {
   // should only be nullable until status is either processed or failed
   @Column({ type: 'timestamptz', nullable: true })
   processedAt: Date | null;
+
+  @OneToMany(() => Match, (match) => match.matchLog)
+  matches: Match[];
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;

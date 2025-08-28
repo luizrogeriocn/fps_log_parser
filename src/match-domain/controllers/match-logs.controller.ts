@@ -6,7 +6,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { MatchLogsService } from './match-logs.service';
+import { MatchLogsService } from '../services/match-logs.service';
 
 @Controller('match_logs')
 export class MatchLogsController {

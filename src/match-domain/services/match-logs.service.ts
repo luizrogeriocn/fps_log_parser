@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MatchLog, MatchLogStatus } from './match-log.entity';
-import { StorageService } from '../storage/storage.interface';
+import { MatchLog, MatchLogStatus } from '../entities/match-log.entity';
+import { StorageService } from '../../storage/storage.interface';
 
 @Injectable()
 export class MatchLogsService {
