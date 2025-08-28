@@ -6,11 +6,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { StorageService } from '../storage/storage.interface';
+import { MatchLogsService } from './match-logs.service';
 
-@Controller('match_log')
-export class MatchLogUploadController {
-  constructor(private readonly storage: StorageService) {}
+@Controller('match_logs')
+export class MatchLogsController {
+  constructor(private readonly service: MatchLogsService) {}
 
   @Get('upload')
   getUploadForm() {
@@ -22,7 +22,7 @@ export class MatchLogUploadController {
         </head>
         <body>
           <h1>Upload File</h1>
-          <form action="/match_log/upload" method="post" enctype="multipart/form-data">
+          <form action="/match_logs/upload" method="post" enctype="multipart/form-data">
             <input type="file" name="file" />
             <button type="submit">Upload</button>
           </form>
@@ -31,10 +31,9 @@ export class MatchLogUploadController {
     `;
   }
 
-  // POST /match_log_upload/upload
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    return this.storage.uploadFile(file);
+  async upload(@UploadedFile() file: Express.Multer.File) {
+    return this.service.createFromUpload(file);
   }
 }
