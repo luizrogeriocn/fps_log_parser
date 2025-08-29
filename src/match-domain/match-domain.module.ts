@@ -11,6 +11,8 @@ import { Kill } from './entities/kill.entity';
 
 // Services
 import { MatchLogsService } from './services/match-logs.service';
+import { IngestionService } from './services/ingestion.service';
+import { MatchService } from './services/match.service';
 
 // Controllers
 import { MatchLogsController } from './controllers/match-logs.controller';
@@ -31,7 +33,9 @@ import { MatchLogsController } from './controllers/match-logs.controller';
     MatchLogsController,
   ],
   providers: [
+    MatchService,
     MatchLogsService,
+    IngestionService,
   ],
   exports: [
     TypeOrmModule,

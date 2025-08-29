@@ -7,10 +7,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MatchLogsService } from '../services/match-logs.service';
+import { IngestionService } from '../services/ingestion.service';
 
 @Controller('match_logs')
 export class MatchLogsController {
-  constructor(private readonly service: MatchLogsService) {}
+  constructor(private readonly service: MatchLogsService, private readonly ingestionService: IngestionService) {}
 
   @Get('upload')
   getUploadForm() {
@@ -34,6 +35,10 @@ export class MatchLogsController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async upload(@UploadedFile() file: Express.Multer.File) {
-    return this.service.createFromUpload(file);
+    const diskFile = this.service.createFromUpload(file);
+
+    // TODO: this should queue a background job
+    this.ingestionService.processFile((await diskFile).url);
+    return diskFile;
   }
 }
