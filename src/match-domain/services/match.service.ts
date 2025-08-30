@@ -31,7 +31,7 @@ export class MatchService {
       });
       if (existing) return; // skip
 
-      // CREATE MATCH
+      // create match
       const match = await matchRepo.save(
         matchRepo.create({
           matchIdentifier: result.matchIdentifier,
@@ -40,13 +40,13 @@ export class MatchService {
         }),
       );
 
-      // BULK UPSERT PLAYERS
+      // bulk upsert players
       const participantNames = [...new Set(result.participants)];
       await playerRepo.upsert(
         participantNames.map((name) => ({ name })), ['name']
       );
 
-      // BULK INSERT PARTICIPANTS
+      // bulk insert participants
       const players = await playerRepo.find({
         where: { name: In(participantNames) },
       });
@@ -60,7 +60,7 @@ export class MatchService {
         participantsMap.set(p.player.name, p);
       }
 
-      // BULK INSERT KILLS
+      // bulk insert kills
       const kills = result.kills
         .map((k) => {
           return {

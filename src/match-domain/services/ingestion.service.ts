@@ -10,7 +10,6 @@ export class IngestionService {
   async processFile(filePath: string) {
     const streamer = new GameLogParser({
       filePath,
-      // instead of consuming, enqueue each chunk
       onChunk: async (chunk) => {
         await this.matchLogsQueue.add('process-match', {
           path: chunk.path,
