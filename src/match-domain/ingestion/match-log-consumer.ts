@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import readline from "node:readline";
 import type { MatchChunk } from "./match-log-streamer.js";
 
 // TODO: maybe put these interfaces in their own files
@@ -18,25 +20,21 @@ export interface ChunkExtraction {
   endLine: number;
   participants: string[];
   kills: KillRecord[];
-  startTime: Date | null;
-  endTime: Date | null;
+  startTime: Date;
+  endTime: Date;
   note?: string;
 }
 
 /**
  * Consumer that extracts participants and kill events from a MatchChunk.
  * 
- * IMPORTANT: It does not parse or validate non-kill lines.
+ * IMPORTANT: It now reads directly from the file path in MatchChunk.
  */
 export class MatchChunkConsumer {
   constructor(
     private readonly onResult?: (result: ChunkExtraction) => void | Promise<void>
   ) {}
 
-  /**
-   * Extracts participants and kills from the chunk text and build a structured result.
-   * `onResult` allows the caller to receive the structured output.
-   */
   async onChunk(chunk: MatchChunk): Promise<void> {
     const tsAndMsgRe = /^(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}) - (.+)$/;
     const weaponKillRe = /^(.+?)\s+killed\s+(.+?)\s+using\s+(.+)\s*$/;
@@ -49,23 +47,22 @@ export class MatchChunkConsumer {
     let startTime: Date | null = null;
     let endTime: Date | null = null;
 
-    const lines = chunk.text.split(/\r?\n/);
+    // stream the file instead of splitting text
+    const fileStream = fs.createReadStream(chunk.path, { encoding: "utf8" });
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
-    // compute the absolute file line number for each line in the chunk using chunk.startLine
-    for (let i = 0; i < lines.length; i++) {
-      const raw = lines[i];
-      const fileLineNo = (chunk.startLine ?? 1) + i;
+    let lineIndex = 0;
+    for await (const raw of rl) {
+      const fileLineNo = (chunk.startLine ?? 1) + lineIndex;
+      lineIndex++;
 
-      // get timestamp + message
       const tsMatch = raw.match(tsAndMsgRe);
-      if (!tsMatch) {
-        continue; // this is not a known event line -> skip
-      }
+      if (!tsMatch) continue;
 
       const [, tsStr, msg] = tsMatch;
       const timestamp = parseDateTimeString(tsStr);
 
-      // Detect start/end lines
+      // start/end lines
       if (msg.match(startRe)) {
         startTime = timestamp;
         continue;
@@ -75,85 +72,79 @@ export class MatchChunkConsumer {
         continue;
       }
 
-      // check world kill
-      {
-        const m = msg.match(worldKillRe);
-        if (m) {
-          const victim = m[1].trim();
-          const cause = m[2].trim();
-
-          // <WORLD> is not counted as a participant so we dont consider the killer
-          participants.add(victim);
-
-          kills.push({
-            timestamp,
-            killer: "<WORLD>",
-            victim,
-            causeOfDeath: cause,
-            isWorldKill: true,
-            rawLine: raw,
-            lineNo: fileLineNo,
-          });
-          continue;
-        }
+      // world kill
+      const wk = msg.match(worldKillRe);
+      if (wk) {
+        const victim = wk[1].trim();
+        const cause = wk[2].trim();
+        participants.add(victim);
+        kills.push({
+          timestamp,
+          killer: "<WORLD>",
+          victim,
+          causeOfDeath: cause,
+          isWorldKill: true,
+          rawLine: raw,
+          lineNo: fileLineNo,
+        });
+        continue;
       }
 
-      // check for weapon kill
-      {
-        const m = msg.match(weaponKillRe);
-        if (m) {
-          const killer = m[1].trim();
-          const victim = m[2].trim();
-          const weapon = m[3].trim();
-
-          // Count only real player names as participants
-          if (killer !== "<WORLD>") participants.add(killer);
-          participants.add(victim);
-
-          kills.push({
-            timestamp,
-            killer,
-            victim,
-            causeOfDeath: weapon,
-            isWorldKill: killer === "<WORLD>",
-            rawLine: raw,
-            lineNo: fileLineNo,
-          });
-          continue;
-        }
+      // weapon kill
+      const mk = msg.match(weaponKillRe);
+      if (mk) {
+        const killer = mk[1].trim();
+        const victim = mk[2].trim();
+        const weapon = mk[3].trim();
+        if (killer !== "<WORLD>") participants.add(killer);
+        participants.add(victim);
+        kills.push({
+          timestamp,
+          killer,
+          victim,
+          causeOfDeath: weapon,
+          isWorldKill: killer === "<WORLD>",
+          rawLine: raw,
+          lineNo: fileLineNo,
+        });
+        continue;
       }
     }
 
-    const result: ChunkExtraction = {
-      matchIdentifier: chunk.matchId,
-      complete: chunk.complete,
-      startLine: chunk.startLine,
-      endLine: chunk.endLine,
-      participants: Array.from(participants),
-      kills,
-      startTime,
-      endTime,
-      note: chunk.note,
-    };
+    rl.close();
 
-    // If a callback was provided, hand off the result; otherwise, log a summary.
-    if (this.onResult) {
-      await this.onResult(result);
-    } else {
-      console.log(
-        `matchIdentifier=${result.matchIdentifier ?? "?"} complete=${result.complete} ` +
+    if (startTime && endTime) {
+      const result: ChunkExtraction = {
+        matchIdentifier: chunk.matchId,
+        complete: chunk.complete,
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
+        participants: Array.from(participants),
+        kills,
+        startTime,
+        endTime,
+        note: chunk.note,
+      };
+
+      if (this.onResult) {
+        console.log("onResult");
+        await this.onResult(result);
+      } else {
+        console.log(
+          `matchIdentifier=${result.matchIdentifier} complete=${result.complete} ` +
           `participants=${result.participants.length} kills=${result.kills.length} ` +
           `start=${result.startTime} end=${result.endTime}`
-      );
+        );
+      }
+    } else {
+      throw new Error(`Match ${chunk.matchId}: missing start or end timestamp`);
     }
   }
 }
 
-// TODO: move this inside the class as a private method
 function parseDateTimeString(dateTimeString: string): Date {
   const [datePart, timePart] = dateTimeString.split(" ");
   const [day, month, year] = datePart.split("/").map(Number);
   const [hour, minute, second] = timePart.split(":").map(Number);
-
   return new Date(year, month - 1, day, hour, minute, second);
-};
+}

@@ -1,20 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { MatchChunkConsumer } from '../ingestion/match-log-consumer'
-import { MatchLogStreamer } from '../ingestion/match-log-streamer'
-import { MatchService } from '../services/match.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { MatchLogStreamer } from '../ingestion/match-log-streamer';
 
 @Injectable()
 export class IngestionService {
-  constructor(private readonly matchService: MatchService) {}
+  constructor(@InjectQueue('match-logs') private readonly matchLogsQueue: Queue) {}
 
   async processFile(filePath: string) {
-    const consumer = new MatchChunkConsumer(async (result) => {
-      await this.matchService.saveChunk(result);
-    });
-
     const streamer = new MatchLogStreamer({
       filePath,
-      onChunk: (chunk) => consumer.onChunk(chunk),
+      // instead of consuming, enqueue each chunk
+      onChunk: async (chunk) => {
+        await this.matchLogsQueue.add('process-match', {
+          path: chunk.path,
+          matchId: chunk.matchId,
+          startLine: chunk.startLine,
+          endLine: chunk.endLine,
+          complete: chunk.complete,
+          note: chunk.note,
+        });
+        console.log(`Enqueued match ${chunk.matchId} from ${filePath}`);
+      },
     });
 
     await streamer.run();

@@ -6,12 +6,17 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { MatchLogsService } from '../services/match-logs.service';
-import { IngestionService } from '../services/ingestion.service';
 
 @Controller('match_logs')
 export class MatchLogsController {
-  constructor(private readonly service: MatchLogsService, private readonly ingestionService: IngestionService) {}
+  constructor(
+    private readonly service: MatchLogsService,
+    @InjectQueue('game-logs') private readonly gameLogsQueue: Queue,
+    @InjectQueue('match-logs') private readonly matchLogsQueue: Queue
+  ) {}
 
   @Get('upload')
   getUploadForm() {
@@ -34,11 +39,12 @@ export class MatchLogsController {
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  async upload(@UploadedFile() file: Express.Multer.File) {
-    const diskFile = this.service.createFromUpload(file);
+  async upload(@UploadedFile() uploadedFile: Express.Multer.File) {
+    const file = await this.service.createFromUpload(uploadedFile);
 
-    // TODO: this should queue a background job
-    this.ingestionService.processFile((await diskFile).url);
-    return diskFile;
+    // enqueue for processing
+    await this.gameLogsQueue.add('processLog', { path: file.url });
+
+    return file;
   }
 }
