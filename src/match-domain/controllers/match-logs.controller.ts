@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -9,11 +10,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { MatchLogsService } from '../services/match-logs.service';
+import { AnalysisService } from '../services/analysis.service';
 
 @Controller('match_logs')
 export class MatchLogsController {
   constructor(
     private readonly service: MatchLogsService,
+    private readonly analysisService: AnalysisService,
     @InjectQueue('game-logs') private readonly gameLogsQueue: Queue,
     @InjectQueue('match-logs') private readonly matchLogsQueue: Queue
   ) {}
@@ -46,5 +49,15 @@ export class MatchLogsController {
     await this.gameLogsQueue.add('processLog', { path: file.url });
 
     return file;
+  }
+
+  @Get('match')
+  async getMatchScores(@Query('externalId') externalId: string) {
+    return this.analysisService.calculateScores(externalId);
+  }
+
+  @Get('global')
+  async getGlobalLeaderboard() {
+    return this.analysisService.getGlobalLeaderboard();
   }
 }

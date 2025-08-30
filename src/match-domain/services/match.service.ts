@@ -49,8 +49,8 @@ export class MatchService {
     const match = await this.matchRepo.save(
       this.matchRepo.create({
         matchIdentifier: result.matchIdentifier,
-        startedAt: result.startTime ?? Date(),
-        finishedAt: result.endTime ?? Date()
+        startedAt: result.startTime,
+        finishedAt: result.endTime
       }),
     );
 

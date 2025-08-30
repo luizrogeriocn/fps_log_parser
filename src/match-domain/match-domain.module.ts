@@ -11,9 +11,10 @@ import { MatchParticipant } from './entities/match-participant.entity';
 import { Kill } from './entities/kill.entity';
 
 // Services
+import { MatchService } from './services/match.service';
 import { MatchLogsService } from './services/match-logs.service';
 import { IngestionService } from './services/ingestion.service';
-import { MatchService } from './services/match.service';
+import { AnalysisService } from './services/analysis.service';
 
 // Controllers
 import { MatchLogsController } from './controllers/match-logs.controller';
@@ -49,6 +50,7 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
     MatchService,
     MatchLogsService,
     IngestionService,
+    AnalysisService,
     GameLogsProcessor,
     MatchLogsProcessor,
   ],
