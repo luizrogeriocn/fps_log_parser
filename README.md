@@ -1,98 +1,119 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Ingestão e Análise de Logs de Partidas
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## 📖 Visão Geral
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Este projeto implementa um pipeline **escalável de ingestão e análise** para arquivos de logs de jogos.  
+Ele processa grandes arquivos de log contendo múltiplas partidas, extrai dados estruturados (jogadores, participantes, mortes, partidas) e persiste em um banco de dados relacional para consultas e análises posteriores.
 
-## Description
+O sistema foi projetado para lidar com **logs possivelmente grandes** de forma eficiente, utilizando:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- Streams para leitura de arquivos sem carregá-los completamente em memória.
+- Divisão dos logs em arquivos menores (um por partida).
+- Um sistema de filas de **dois níveis** com BullMQ para escalabilidade e tolerância a falhas.
 
-## Project setup
+---
 
-```bash
-$ npm install
+## 🏗️ Arquitetura
+
+A arquitetura possui quatro camadas principais:
+
+1. **Camada de Ingestão**  
+   - Usa o `MatchLogStreamer` para ler arquivos de log linha por linha.  
+   - Divide o log em chunks (um arquivo por partida).  
+   - Enfileira jobs na fila `match-logs` para cada partida.
+
+2. **Camada de transformação dos dados**  
+   - O `MatchLogConsumer` analisa arquivos de partidas individuais e extrai participantes, mortes e timestamps.  
+   - Envia os resultados estruturados para o `MatchService`.
+
+3. **Camada de Persistência**  
+   - Entidades modeladas com TypeORM: `Match`, `Player`, `MatchParticipant` e `Kill`.  
+   - Transações garantem ingestão idempotente (segura para retries). [TO-DO] 
+   - A tabela global `Player` evita duplicação de identidades de jogadores entre partidas.
+
+4. **Camada de Análise**  
+   - O `AnalysisService` calcula placares de cada partida (kills e deaths por jogador), ranking
+     global e armas favoritas.
+   - Extensões futuras: maior sequencia de frags e awards. [TO-DO]
+
+---
+
+## ⚙️ Sistema de Filas em Dois Níveis
+
+Foi utilizado **BullMQ** com duas filas:
+
+- **Fila `game-logs`**  
+  Responsável por jobs de grandes arquivos de log.  
+  Cada job:
+  - Executa o `MatchLogStreamer` para dividir o arquivo em partidas.  
+  - Enfileira novos jobs na fila `match-logs` (um por partida).
+
+- **Fila `match-logs`**  
+  Responsável por jobs de partidas individuais.  
+  Cada job:
+  - Executa o `MatchChunkConsumer` para analisar o arquivo da partida.  
+  - Persiste os dados no banco via `MatchService`.
+
+### Benefícios
+- **Escalabilidade**: Um único log se divide em múltiplos jobs de partidas processados em paralelo.  
+- **Isolamento de falhas**: Uma falha ao processar uma partida não afeta as demais.  
+- **Retries**: Apenas jobs que falharem são reprocessados. [TO-DO retries ainda nao foram configurados]
+
+---
+
+## 📉 Uso de Streams para Eficiência
+
+O sistema usa **streams do Node.js** (`fs.ReadStream` e `readline.Interface`) para processar os logs linha a linha:
+
+- **Memória eficiente**: O arquivo nunca é carregado inteiro na RAM. Mesmo logs muito grandes podem ser processados.  
+- **Saída em chunks**: Cada partida é gravada diretamente em arquivo próprio via `fs.WriteStream`.  
+- **Extensível**: Essa mesma lógica pode ser adaptada para consumir logs via outros tipos de streams.
+
+Isso torna o pipeline **agnóstico da origem dos dados**: hoje arquivos, amanhã fluxo em tempo real.
+
+---
+
+## 🗃️ Entidades
+
+Diagrama ER das entidades principais:
+
+```mermaid
+erDiagram
+    Player ||--o{ MatchParticipant : participa
+    Match ||--o{ MatchParticipant : possui
+    Match ||--o{ Kill : inclui
+    MatchParticipant ||--o{ Kill : killer
+    MatchParticipant ||--o{ Kill : victim
+
+    Player {
+      int id
+      string name
+    }
+
+    Match {
+      int id
+      string externalId
+      datetime startTime
+      datetime endTime
+      boolean complete
+      string note
+    }
+
+    MatchParticipant {
+      int id
+      int playerId
+      int matchId
+    }
+
+    Kill {
+      int id
+      datetime timestamp
+      string causeOfDeath
+      boolean isWorldKill
+      int lineNo
+      string rawLine
+      int killerParticipantId
+      int victimParticipantId
+    }
 ```
 
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
