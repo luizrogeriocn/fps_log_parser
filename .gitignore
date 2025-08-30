@@ -60,3 +60,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Uploaded files in dev environment
 uploads/*
+game_log.txt
+dump.rdb
+package-lock.json
