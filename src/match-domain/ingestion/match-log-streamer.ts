@@ -5,7 +5,7 @@ import readline from "node:readline";
 // A chunk of raw log lines corresponding to a single match.
 export interface MatchChunk {
   matchId: string;
-  text: string;
+  path: string;
   startLine: number;
   endLine: number;
   complete: boolean;
@@ -16,6 +16,7 @@ export interface MatchChunk {
 export interface MatchLogStreamerOptions {
   filePath: string;
   onChunk: (chunk: MatchChunk) => void | Promise<void>;
+  outputDir?: string;
   startRe?: RegExp;
   endRe?: RegExp;
   encoding?: BufferEncoding;
@@ -33,12 +34,14 @@ export class MatchLogStreamer {
   private readonly startRe: RegExp;
   private readonly endRe: RegExp;
   private readonly encoding: BufferEncoding;
+  private readonly outputDir: string;
 
   private active = false;
-  private buffer: string[] = [];
-  private currentMatchId: string;
+  private currentMatchId = "";
   private startLineNo: number | null = null;
   private lineNo = 0;
+  private currentStream: fs.WriteStream | null = null;
+  private currentFilePath: string | null = null;
 
   constructor({
     filePath,
@@ -46,6 +49,7 @@ export class MatchLogStreamer {
     startRe = /New match (\d+) has started/,
     endRe = /Match (\d+) has ended/,
     encoding = "utf8",
+    outputDir = path.join(process.cwd(), "tmp_matches"),
   }: MatchLogStreamerOptions) {
     if (!filePath) throw new Error("filePath is required");
     if (typeof onChunk !== "function") throw new Error("onChunk callback is required");
@@ -59,6 +63,10 @@ export class MatchLogStreamer {
     this.startRe = startRe;
     this.endRe = endRe;
     this.encoding = encoding;
+    this.outputDir = outputDir;
+
+    // ensure output directory exists
+    fs.mkdirSync(this.outputDir, { recursive: true });
   }
 
   /**
@@ -66,7 +74,7 @@ export class MatchLogStreamer {
    * Resolves when fully processed (or rejects on stream error).
    */
   async run(): Promise<void> {
-    if (this.active) throw new Error("This stream is already being ran");
+    if (this.active) throw new Error("This stream is already running");
     this.active = true;
 
     const stream = fs.createReadStream(this.filePath, { encoding: this.encoding });
@@ -79,25 +87,20 @@ export class MatchLogStreamer {
         await this.handleLine(line);
       }
 
-      // if a match started but never ended, mark as incomplete (reached EOF)
-      if (this.buffer.length > 0) {
-        await this.emitChunk({
-          matchId: this.currentMatchId,
-          lines: this.buffer.slice(),
-          startLine: this.startLineNo ?? Math.max(1, this.lineNo),
-          endLine: this.lineNo,
-          complete: false,
-        });
+      // if match started but never ended, flush as incomplete
+      if (this.currentStream) {
+        await this.closeAndEmit(false);
       }
     } finally {
       rl.close();
       stream.close?.();
-      // reset
+
       this.active = false;
-      this.buffer = [];
       this.currentMatchId = "";
       this.startLineNo = null;
       this.lineNo = 0;
+      this.currentStream = null;
+      this.currentFilePath = null;
     }
   }
 
@@ -107,71 +110,63 @@ export class MatchLogStreamer {
     if (start) {
       const newId = start[1];
 
-      // If already buffering (missing end)
-      if (this.buffer.length > 0) {
-        await this.emitChunk({
-          matchId: this.currentMatchId,
-          lines: this.buffer.slice(),
-          startLine: this.startLineNo ?? Math.max(1, this.lineNo - 1),
-          endLine: this.lineNo - 1,
-          complete: false,
-        });
+      // If already streaming another match (no end yet)
+      if (this.currentStream) {
+        await this.closeAndEmit(false);
       }
 
-      // Start fresh buffer
-      this.buffer = [line];
       this.currentMatchId = newId;
       this.startLineNo = this.lineNo;
+
+      this.currentFilePath = path.join(this.outputDir, `${newId}.log`);
+      this.currentStream = fs.createWriteStream(this.currentFilePath, {
+        flags: "w",
+        encoding: this.encoding,
+      });
+
+      this.currentStream.write(line + "\n");
       return;
     }
 
-    // If currently buffering, push the line and check for end token
-    if (this.buffer.length > 0) {
-      this.buffer.push(line);
+    // If currently streaming a match
+    if (this.currentStream) {
+      this.currentStream.write(line + "\n");
 
       const end = line.match(this.endRe);
       if (end) {
         const endId = end[1];
         const idMismatch = !!(this.currentMatchId && endId !== this.currentMatchId);
 
-        await this.emitChunk({
-          matchId: this.currentMatchId ?? endId,
-          lines: this.buffer.slice(),
-          startLine: this.startLineNo ?? Math.max(1, this.lineNo),
-          endLine: this.lineNo,
-          complete: !idMismatch,
-          note: idMismatch
-            ? `End token (${endId}) did not match start token (${this.currentMatchId}).`
-            : undefined,
-        });
-
-        // Reset buffer
-        this.buffer = [];
-        this.currentMatchId = "";
-        this.startLineNo = null;
+        await this.closeAndEmit(!idMismatch, idMismatch
+          ? `End token (${endId}) did not match start token (${this.currentMatchId}).`
+          : undefined);
       }
-
-      return;
     }
   }
 
-  private async emitChunk(args: {
-    matchId: string;
-    lines: string[];
-    startLine: number;
-    endLine: number;
-    complete: boolean;
-    note?: string;
-  }): Promise<void> {
+  private async closeAndEmit(
+    complete: boolean,
+    note?: string,
+  ): Promise<void> {
+    if (!this.currentStream || !this.currentFilePath) return;
+
+    await new Promise((resolve) => this.currentStream?.end(resolve));
+
     const chunk: MatchChunk = {
-      matchId: args.matchId,
-      text: args.lines.join("\n"),
-      startLine: args.startLine,
-      endLine: args.endLine,
-      complete: args.complete,
-      note: args.note,
+      matchId: this.currentMatchId,
+      path: this.currentFilePath,
+      startLine: this.startLineNo ?? 1,
+      endLine: this.lineNo,
+      complete,
+      note,
     };
 
     await this.onChunk(chunk);
+
+    // reset
+    this.currentStream = null;
+    this.currentFilePath = null;
+    this.currentMatchId = "";
+    this.startLineNo = null;
   }
 }

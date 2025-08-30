@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StorageModule } from '../storage/storage.module';
+import { BullModule } from '@nestjs/bullmq';
 
 // Entities
 import { MatchLog } from './entities/match-log.entity';
@@ -17,6 +18,10 @@ import { MatchService } from './services/match.service';
 // Controllers
 import { MatchLogsController } from './controllers/match-logs.controller';
 
+// Processors
+import { GameLogsProcessor } from './workers/game-logs.processor';
+import { MatchLogsProcessor } from './workers/match-logs.processor';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -26,6 +31,14 @@ import { MatchLogsController } from './controllers/match-logs.controller';
       MatchParticipant,
       Kill,
     ]),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST ?? 'localhost',
+        port: Number(process.env.REDIS_PORT ?? 6379),
+      },
+    }),
+    BullModule.registerQueue({name: 'game-logs'}),
+    BullModule.registerQueue({name: 'match-logs',}),
     // TODO how to not use this?
     forwardRef(() => StorageModule),
   ],
@@ -36,6 +49,8 @@ import { MatchLogsController } from './controllers/match-logs.controller';
     MatchService,
     MatchLogsService,
     IngestionService,
+    GameLogsProcessor,
+    MatchLogsProcessor,
   ],
   exports: [
     TypeOrmModule,
