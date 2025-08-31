@@ -12,10 +12,10 @@ import { Queue } from 'bullmq';
 import { GameLogService } from '../services/game-log.service';
 import { AnalysisService } from '../services/analysis.service';
 
-@Controller('match_logs')
+@Controller('matches')
 export class MatchController {
   constructor(
-    private readonly service: GameLogService,
+    private readonly gameLogService: GameLogService,
     private readonly analysisService: AnalysisService,
     @InjectQueue('game-logs') private readonly gameLogsQueue: Queue,
     @InjectQueue('match-logs') private readonly matchLogsQueue: Queue
@@ -31,7 +31,7 @@ export class MatchController {
         </head>
         <body>
           <h1>Upload File</h1>
-          <form action="/match_logs/upload" method="post" enctype="multipart/form-data">
+          <form action="/matches/upload" method="post" enctype="multipart/form-data">
             <input type="file" name="file" />
             <button type="submit">Upload</button>
           </form>
@@ -43,14 +43,15 @@ export class MatchController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async upload(@UploadedFile() uploadedFile: Express.Multer.File) {
-    const file = await this.service.createFromUpload(uploadedFile);
+    const gameLog = await this.gameLogService.createFromUpload(uploadedFile);
 
     // enqueue for processing
-    await this.gameLogsQueue.add('processLog', { path: file.url });
+    await this.gameLogsQueue.add('processLog', { path: gameLog.url });
 
-    return file;
+    return gameLog;
   }
 
+  // how to get this id from the path?
   @Get('match')
   async getMatchScores(@Query('externalId') externalId: string) {
     return this.analysisService.calculateScores(externalId);

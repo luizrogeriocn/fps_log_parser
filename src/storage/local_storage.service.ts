@@ -7,7 +7,7 @@ import { StorageService } from './storage.interface';
 export class LocalStorageService extends StorageService {
   async uploadFile(file: Express.Multer.File): Promise<{ url: string }> {
     // TODO: find a better way of doing this 
-    const uploadPath = join(__dirname, '..', '..', '..',  'uploads');
+    const uploadPath = join(__dirname, '..', '..',  'uploads');
     await fs.mkdir(uploadPath, { recursive: true });
 
     const fileName = `${Date.now()}-${file.originalname}`;

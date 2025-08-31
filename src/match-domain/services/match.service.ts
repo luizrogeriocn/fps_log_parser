@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { Match } from '../entities/match.entity';
 import { MatchParticipant } from '../entities/match-participant.entity';
 import { Kill } from '../entities/kill.entity';
 import { Player } from '../entities/player.entity';
 import { ChunkExtraction } from '../ingestion/match-log-parser';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MatchService {
@@ -14,72 +15,65 @@ export class MatchService {
     @InjectRepository(Player) private readonly playerRepo: Repository<Player>,
     @InjectRepository(MatchParticipant) private readonly participantRepo: Repository<MatchParticipant>,
     @InjectRepository(Kill) private readonly killRepo: Repository<Kill>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  private async findOrCreatePlayer(name: string): Promise<Player> {
-    let player = await this.playerRepo.findOne({ where: { name } });
-    if (!player) {
-      player = this.playerRepo.create({ name });
-      player = await this.playerRepo.save(player);
-    }
-    return player;
-  }
+  async importMatch(result: ChunkExtraction): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const matchRepo = manager.getRepository(Match);
+      const playerRepo = manager.getRepository(Player);
+      const mpRepo = manager.getRepository(MatchParticipant);
+      const killRepo = manager.getRepository(Kill);
 
-  private async findOrCreateParticipant(player: Player, match: Match): Promise<MatchParticipant> {
-    let mp = await this.participantRepo.findOne({
-      where: { player: { id: player.id }, match: { id: match.id } },
-    });
-    if (!mp) {
-      mp = this.participantRepo.create({ player, match });
-      mp = await this.participantRepo.save(mp);
-    }
-    return mp;
-  }
+      // check if match already exists
+      const existing = await matchRepo.findOne({
+        where: { matchIdentifier: result.matchIdentifier ?? null },
+      });
+      if (existing) return; // skip
 
-  async saveChunk(result: ChunkExtraction): Promise<void> {
-    const existing = await this.matchRepo.findOne({
-      where: { matchIdentifier: result.matchIdentifier ?? null },
-    });
-
-    if (existing) {
-      // Already processed this match — skip
-      return;
-    }
-
-    const match = await this.matchRepo.save(
-      this.matchRepo.create({
-        matchIdentifier: result.matchIdentifier,
-        startedAt: result.startTime,
-        finishedAt: result.endTime
-      }),
-    );
-
-    // participants
-    const participantsMap = new Map<string, MatchParticipant>();
-    for (const name of result.participants) {
-      const player = await this.findOrCreatePlayer(name);
-      const mp = await this.findOrCreateParticipant(player, match);
-      participantsMap.set(name, mp);
-    }
-
-    // kills
-    const kills: Kill[] = [];
-    for (const k of result.kills) {
-      const killer = k.isWorldKill ? null : participantsMap.get(k.killer);
-      const victim = participantsMap.get(k.victim);
-
-      if (!victim) continue; // skip invalid data
-
-      kills.push(
-        this.killRepo.create({
-          happenedAt: k.timestamp ?? Date(),
-          causeOfDeath: k.causeOfDeath,
-          killer: killer,
-          victim: victim,
+      // CREATE MATCH
+      const match = await matchRepo.save(
+        matchRepo.create({
+          matchIdentifier: result.matchIdentifier,
+          startedAt: result.startTime,
+          finishedAt: result.endTime,
         }),
       );
-    }
 
-    await this.killRepo.save(kills);
+      // BULK UPSERT PLAYERS
+      const participantNames = [...new Set(result.participants)];
+      await playerRepo.upsert(
+        participantNames.map((name) => ({ name })), ['name']
+      );
+
+      // BULK INSERT PARTICIPANTS
+      const players = await playerRepo.find({
+        where: { name: In(participantNames) },
+      });
+
+      const participants = await mpRepo.save(
+        players.map((player) => mpRepo.create({ match, player })),
+      );
+
+      const participantsMap = new Map<string, MatchParticipant>();
+      for (const p of participants) {
+        participantsMap.set(p.player.name, p);
+      }
+
+      // BULK INSERT KILLS
+      const kills = result.kills
+        .map((k) => {
+          return {
+            happenedAt: k.timestamp ?? new Date(),
+            causeOfDeath: k.causeOfDeath,
+            killer: k.isWorldKill ? null : participantsMap.get(k.killer),
+            victim: participantsMap.get(k.victim),
+          };
+        })
+
+      killRepo.save(
+        kills.map((kill) => killRepo.create(kill)),
+      );
+    });
   }
 }

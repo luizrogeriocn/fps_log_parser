@@ -34,6 +34,7 @@ import { BullModule } from '@nestjs/bullmq';
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
+        logging: true,
       }),
     }),
     MatchDomainModule,

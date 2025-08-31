@@ -16,7 +16,7 @@ export class MatchLogsProcessor extends WorkerHost {
     console.log(`Processing match ${chunk.matchId} from file ${chunk.path}...`);
 
     const consumer = new MatchLogParser(async (result) => {
-      await this.matchService.saveChunk(result);
+      await this.matchService.importMatch(result);
     });
 
     await consumer.onChunk(chunk);

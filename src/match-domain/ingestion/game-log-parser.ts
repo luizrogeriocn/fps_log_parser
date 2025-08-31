@@ -56,7 +56,6 @@ export class GameLogParser {
 
     // TODO: there might be a better way of solving this.
     filePath = path.resolve(process.cwd(), filePath)
-    console.log(filePath)
 
     this.filePath = filePath;
     this.onChunk = onChunk;
