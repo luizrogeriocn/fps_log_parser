@@ -54,7 +54,7 @@ export class MatchController {
   // how to get this id from the path?
   @Get('match')
   async getMatchScores(@Query('externalId') externalId: string) {
-    return this.analysisService.calculateScores(externalId);
+    return this.analysisService.getMatchLeaderboard(externalId);
   }
 
   @Get('global')

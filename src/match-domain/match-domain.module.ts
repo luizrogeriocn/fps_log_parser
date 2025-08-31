@@ -23,6 +23,14 @@ import { MatchController } from './controllers/match.controller';
 import { GameLogsProcessor } from './workers/game-logs.processor';
 import { MatchLogsProcessor } from './workers/match-logs.processor';
 
+// Analysis
+import { GlobalLeaderboard } from './analysis/global-leaderboard.analysis';
+import { MatchLeaderboard } from './analysis/match-leaderboard.analysis';
+import { MatchFragStreaks } from './analysis/match-frag-streaks.analysis';
+import { MatchSpeedKillers } from './analysis/match-speed-killers.analysis';
+import { MatchNoDeath } from './analysis/match-no-death.analysis';
+import { MatchWinner } from './analysis/match-winner.analysis';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -47,6 +55,12 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
     AnalysisService,
     GameLogsProcessor,
     MatchLogsProcessor,
+    GlobalLeaderboard,
+    MatchLeaderboard,
+    MatchFragStreaks,
+    MatchSpeedKillers,
+    MatchNoDeath,
+    MatchWinner,
   ],
   exports: [
     TypeOrmModule,
