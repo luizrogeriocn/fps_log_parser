@@ -8,7 +8,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { MatchLog } from './match-log.entity';
+import { GameLog } from './game-log.entity';
 import { MatchParticipant } from './match-participant.entity';
 
 @Entity({ name: 'matches' })
@@ -25,9 +25,9 @@ export class Match {
   @Column({ type: 'timestamptz', name: 'finished_at'})
   finishedAt: Date;
 
-  @ManyToOne(() => MatchLog, (log) => log.matches, { onDelete: 'CASCADE' })
+  @ManyToOne(() => GameLog, (log) => log.matches, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'match_log_id' })
-  matchLog: MatchLog;
+  matchLog: GameLog;
 
   @OneToMany(() => MatchParticipant, (mp) => mp.match)
   participants: MatchParticipant[];

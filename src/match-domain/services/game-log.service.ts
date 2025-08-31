@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MatchLog, MatchLogStatus } from '../entities/match-log.entity';
+import { GameLog, MatchLogStatus } from '../entities/game-log.entity';
 import { StorageService } from '../../storage/storage.interface';
 
 @Injectable()
-export class MatchLogsService {
+export class GameLogService {
   constructor(
-    @InjectRepository(MatchLog)
-    private readonly repo: Repository<MatchLog>,
+    @InjectRepository(GameLog)
+    private readonly repo: Repository<GameLog>,
     private readonly storage: StorageService
   ) {}
 

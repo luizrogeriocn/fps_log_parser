@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { MatchLogStreamer } from '../ingestion/match-log-streamer';
+import { GameLogParser } from '../ingestion/game-log-parser';
 
 @Injectable()
 export class IngestionService {
   constructor(@InjectQueue('match-logs') private readonly matchLogsQueue: Queue) {}
 
   async processFile(filePath: string) {
-    const streamer = new MatchLogStreamer({
+    const streamer = new GameLogParser({
       filePath,
       // instead of consuming, enqueue each chunk
       onChunk: async (chunk) => {

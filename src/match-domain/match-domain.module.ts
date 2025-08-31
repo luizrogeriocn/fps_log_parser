@@ -4,7 +4,7 @@ import { StorageModule } from '../storage/storage.module';
 import { BullModule } from '@nestjs/bullmq';
 
 // Entities
-import { MatchLog } from './entities/match-log.entity';
+import { GameLog } from './entities/game-log.entity';
 import { Match } from './entities/match.entity';
 import { Player } from './entities/player.entity';
 import { MatchParticipant } from './entities/match-participant.entity';
@@ -12,12 +12,12 @@ import { Kill } from './entities/kill.entity';
 
 // Services
 import { MatchService } from './services/match.service';
-import { MatchLogsService } from './services/match-logs.service';
+import { GameLogService } from './services/game-log.service';
 import { IngestionService } from './services/ingestion.service';
 import { AnalysisService } from './services/analysis.service';
 
 // Controllers
-import { MatchLogsController } from './controllers/match-logs.controller';
+import { MatchController } from './controllers/match.controller';
 
 // Processors
 import { GameLogsProcessor } from './workers/game-logs.processor';
@@ -26,7 +26,7 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      MatchLog,
+      GameLog,
       Match,
       Player,
       MatchParticipant,
@@ -38,11 +38,11 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
     forwardRef(() => StorageModule),
   ],
   controllers: [
-    MatchLogsController,
+    MatchController,
   ],
   providers: [
     MatchService,
-    MatchLogsService,
+    GameLogService,
     IngestionService,
     AnalysisService,
     GameLogsProcessor,

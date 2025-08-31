@@ -3,7 +3,7 @@ import path from "node:path";
 import readline from "node:readline";
 
 // A chunk of raw log lines corresponding to a single match.
-export interface MatchChunk {
+export interface MatchLogChunk {
   matchId: string;
   path: string;
   startLine: number;
@@ -13,9 +13,9 @@ export interface MatchChunk {
 }
 
 // options to configure the MatchLogStreamer.
-export interface MatchLogStreamerOptions {
+export interface GameLogParserOptions {
   filePath: string;
-  onChunk: (chunk: MatchChunk) => void | Promise<void>;
+  onChunk: (chunk: MatchLogChunk) => void | Promise<void>;
   outputDir?: string;
   startRe?: RegExp;
   endRe?: RegExp;
@@ -28,9 +28,9 @@ export interface MatchLogStreamerOptions {
  * - Accumulates lines between "match start" and "match end"
  * - Hands the chunk to a provided consumer without parsing it itself
  */
-export class MatchLogStreamer {
+export class GameLogParser {
   private readonly filePath: string;
-  private readonly onChunk: (chunk: MatchChunk) => void | Promise<void>;
+  private readonly onChunk: (chunk: MatchLogChunk) => void | Promise<void>;
   private readonly startRe: RegExp;
   private readonly endRe: RegExp;
   private readonly encoding: BufferEncoding;
@@ -50,7 +50,7 @@ export class MatchLogStreamer {
     endRe = /Match (\d+) has ended/,
     encoding = "utf8",
     outputDir = path.join(process.cwd(), "tmp_matches"),
-  }: MatchLogStreamerOptions) {
+  }: GameLogParserOptions) {
     if (!filePath) throw new Error("filePath is required");
     if (typeof onChunk !== "function") throw new Error("onChunk callback is required");
 
@@ -152,7 +152,7 @@ export class MatchLogStreamer {
 
     await new Promise((resolve) => this.currentStream?.end(resolve));
 
-    const chunk: MatchChunk = {
+    const chunk: MatchLogChunk = {
       matchId: this.currentMatchId,
       path: this.currentFilePath,
       startLine: this.startLineNo ?? 1,

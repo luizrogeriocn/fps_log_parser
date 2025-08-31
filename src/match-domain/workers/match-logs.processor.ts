@@ -1,8 +1,8 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { MatchService } from '../services/match.service';
-import { MatchChunkConsumer } from '../ingestion/match-log-consumer';
-import type { MatchChunk } from '../ingestion/match-log-streamer';
+import { MatchLogParser } from '../ingestion/match-log-parser';
+import type { MatchLogChunk } from '../ingestion/game-log-parser';
 
 @Processor('match-logs')
 export class MatchLogsProcessor extends WorkerHost {
@@ -10,12 +10,12 @@ export class MatchLogsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<MatchChunk>) {
+  async process(job: Job<MatchLogChunk>) {
     const chunk = job.data;
 
     console.log(`Processing match ${chunk.matchId} from file ${chunk.path}...`);
 
-    const consumer = new MatchChunkConsumer(async (result) => {
+    const consumer = new MatchLogParser(async (result) => {
       await this.matchService.saveChunk(result);
     });
 

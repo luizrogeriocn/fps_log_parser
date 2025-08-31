@@ -9,13 +9,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { MatchLogsService } from '../services/match-logs.service';
+import { GameLogService } from '../services/game-log.service';
 import { AnalysisService } from '../services/analysis.service';
 
 @Controller('match_logs')
-export class MatchLogsController {
+export class MatchController {
   constructor(
-    private readonly service: MatchLogsService,
+    private readonly service: GameLogService,
     private readonly analysisService: AnalysisService,
     @InjectQueue('game-logs') private readonly gameLogsQueue: Queue,
     @InjectQueue('match-logs') private readonly matchLogsQueue: Queue

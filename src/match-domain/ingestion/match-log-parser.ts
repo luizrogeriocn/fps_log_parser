@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import readline from "node:readline";
-import type { MatchChunk } from "./match-log-streamer.js";
+import type { MatchLogChunk } from "./game-log-parser.js";
 
 // TODO: maybe put these interfaces in their own files
 export interface KillRecord {
@@ -30,12 +30,12 @@ export interface ChunkExtraction {
  * 
  * IMPORTANT: It now reads directly from the file path in MatchChunk.
  */
-export class MatchChunkConsumer {
+export class MatchLogParser {
   constructor(
     private readonly onResult?: (result: ChunkExtraction) => void | Promise<void>
   ) {}
 
-  async onChunk(chunk: MatchChunk): Promise<void> {
+  async onChunk(chunk: MatchLogChunk): Promise<void> {
     const tsAndMsgRe = /^(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}) - (.+)$/;
     const weaponKillRe = /^(.+?)\s+killed\s+(.+?)\s+using\s+(.+)\s*$/;
     const worldKillRe = /^<WORLD>\s+killed\s+(.+?)\s+by\s+(.+)\s*$/;
@@ -112,6 +112,7 @@ export class MatchChunkConsumer {
     }
 
     rl.close();
+    fs.unlink(chunk.path, (err) => {});
 
     if (startTime && endTime) {
       const result: ChunkExtraction = {

@@ -5,7 +5,7 @@ import { Match } from '../entities/match.entity';
 import { MatchParticipant } from '../entities/match-participant.entity';
 import { Kill } from '../entities/kill.entity';
 import { Player } from '../entities/player.entity';
-import { ChunkExtraction } from './../ingestion/match-log-consumer';
+import { ChunkExtraction } from '../ingestion/match-log-parser';
 
 @Injectable()
 export class MatchService {

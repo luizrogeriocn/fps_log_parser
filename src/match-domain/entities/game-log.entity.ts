@@ -16,7 +16,7 @@ export enum MatchLogStatus {
 }
 
 @Entity({ name: 'match_logs' })
-export class MatchLog {
+export class GameLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
