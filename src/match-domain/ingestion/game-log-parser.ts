@@ -12,7 +12,7 @@ export interface MatchLogChunk {
   note?: string;
 }
 
-// options to configure the MatchLogStreamer.
+// options to configure the GameLogParser.
 export interface GameLogParserOptions {
   filePath: string;
   onChunk: (chunk: MatchLogChunk) => void | Promise<void>;

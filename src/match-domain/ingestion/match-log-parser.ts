@@ -47,7 +47,7 @@ export class MatchLogParser {
     let startTime: Date | null = null;
     let endTime: Date | null = null;
 
-    // stream the file instead of splitting text
+    // stream the file
     const fileStream = fs.createReadStream(chunk.path, { encoding: "utf8" });
     const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
@@ -62,7 +62,7 @@ export class MatchLogParser {
       const [, tsStr, msg] = tsMatch;
       const timestamp = parseDateTimeString(tsStr);
 
-      // start/end lines
+      // match start/end lines
       if (msg.match(startRe)) {
         startTime = timestamp;
         continue;
@@ -72,7 +72,7 @@ export class MatchLogParser {
         continue;
       }
 
-      // world kill
+      // match world kill
       const wk = msg.match(worldKillRe);
       if (wk) {
         const victim = wk[1].trim();
@@ -90,7 +90,7 @@ export class MatchLogParser {
         continue;
       }
 
-      // weapon kill
+      // match weapon kill
       const mk = msg.match(weaponKillRe);
       if (mk) {
         const killer = mk[1].trim();
@@ -109,28 +109,32 @@ export class MatchLogParser {
         });
         continue;
       }
+
+      // lines that does not match any of the patterns are ignored
     }
 
+    // close the stream and delete the temporary file
     rl.close();
     fs.unlink(chunk.path, (err) => {});
 
     if (startTime && endTime) {
       const result: ChunkExtraction = {
         matchIdentifier: chunk.matchId,
-        complete: chunk.complete,
-        startLine: chunk.startLine,
-        endLine: chunk.endLine,
+        complete: chunk.complete, // this idea was not used.
+        startLine: chunk.startLine, // not used but if time allows, should be added
+        endLine: chunk.endLine, // not used but if time allows, should be added
         participants: Array.from(participants),
         kills,
         startTime,
         endTime,
-        note: chunk.note,
+        note: chunk.note, // this idea was not used.
       };
 
       if (this.onResult) {
         console.log("onResult");
         await this.onResult(result);
       } else {
+        // no callback was given, let's just log for debugging while in dev.
         console.log(
           `matchIdentifier=${result.matchIdentifier} complete=${result.complete} ` +
           `participants=${result.participants.length} kills=${result.kills.length} ` +
