@@ -32,12 +32,6 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
       MatchParticipant,
       Kill,
     ]),
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST ?? 'localhost',
-        port: Number(process.env.REDIS_PORT ?? 6379),
-      },
-    }),
     BullModule.registerQueue({name: 'game-logs'}),
     BullModule.registerQueue({name: 'match-logs',}),
     // TODO how to not use this?
@@ -56,7 +50,7 @@ import { MatchLogsProcessor } from './workers/match-logs.processor';
   ],
   exports: [
     TypeOrmModule,
-    MatchLogsService,
+    GameLogService,
   ],
 })
 export class MatchDomainModule {}
