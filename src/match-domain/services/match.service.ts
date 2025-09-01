@@ -6,7 +6,6 @@ import { MatchParticipant } from '../entities/match-participant.entity';
 import { Kill } from '../entities/kill.entity';
 import { Player } from '../entities/player.entity';
 import { ChunkExtraction } from '../ingestion/match-log-parser';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MatchService {
@@ -71,7 +70,7 @@ export class MatchService {
           };
         })
 
-      killRepo.save(
+      await killRepo.save(
         kills.map((kill) => killRepo.create(kill)),
       );
     });

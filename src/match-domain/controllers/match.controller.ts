@@ -2,8 +2,9 @@ import {
   Controller,
   Get,
   Post,
-  Query,
+  Param,
   UploadedFile,
+  BadRequestException,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -21,44 +22,34 @@ export class MatchController {
     @InjectQueue('match-logs') private readonly matchLogsQueue: Queue
   ) {}
 
-  @Get('upload')
-  getUploadForm() {
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Upload File</title>
-        </head>
-        <body>
-          <h1>Upload File</h1>
-          <form action="/matches/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" />
-            <button type="submit">Upload</button>
-          </form>
-        </body>
-      </html>
-    `;
+  @Get()
+  async getGlobalLeaderboard() {
+    return this.analysisService.getGlobalLeaderboard();
   }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async upload(@UploadedFile() uploadedFile: Express.Multer.File) {
+    if (!uploadedFile) {
+      throw new BadRequestException('No file uploaded');
+    }
+
     const gameLog = await this.gameLogService.createFromUpload(uploadedFile);
 
     // enqueue for processing
     await this.gameLogsQueue.add('processLog', { path: gameLog.url });
-
-    return gameLog;
+    return {
+      message: 'File uploaded successfully',
+      gameLog,
+    };
   }
 
-  // how to get this id from the path?
-  @Get('match')
-  async getMatchScores(@Query('externalId') externalId: string) {
+  @Get(':match_id')
+  async getMatchScores(@Param('match_id') externalId: string) {
+    if (!/^\d+$/.test(externalId)) {
+      throw new BadRequestException('Parameter must be a numeric string');
+    }
+
     return this.analysisService.getMatchLeaderboard(externalId);
-  }
-
-  @Get('global')
-  async getGlobalLeaderboard() {
-    return this.analysisService.getGlobalLeaderboard();
   }
 }
